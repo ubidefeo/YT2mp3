@@ -8,6 +8,9 @@ How you play them back is out of the scope of this script.
 
 Since it depends on the correct functioning of `yt-dlp`, if you get errors make sure your yt-dlp is up-to-date.
 
+![chat](images/BotChat.png)
+![shell](images/terminal_progress.png)
+
 ## Requirements
 
 * [create your Telegram Bot](https://core.telegram.org/bots/tutorial) first.

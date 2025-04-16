@@ -60,6 +60,6 @@ async def url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 app = ApplicationBuilder().token(TG_TOKEN).build()
 
 app.add_handler(CommandHandler("hello", hello))
-app.add_handler(CommandHandler("url", url))
+app.add_handler(CommandHandler("dl", url))
 
 app.run_polling()
