@@ -43,3 +43,12 @@ chmod +x downloader.py
 ```
 
 If everything worked well you can start sending messages to your bot and get it to download mp3 of any YT video for you.
+
+## Commands
+
+### `/hello`
+The bot will respond to `/hello` with "Hello YOUR_NAME".
+
+### `/dl`
+The bot will process the URL and download the content to mp3.
+`/dl https://www.youtube.com/watch?v=dQw4w9WgXcQ`
