@@ -1,0 +1,13 @@
+# Authorized Users Configuration
+
+# Admin users have full access and can add new users
+admins:
+  - 16168654  # Your Telegram user ID
+
+# Regular users can only use the bot's main features
+users:
+
+# Configuration options
+settings:
+  unauthorized_message: true  # Whether to send a message when unauthorized users try to access
+  log_attempts: true          # Whether to log access attempts
