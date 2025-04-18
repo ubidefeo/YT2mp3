@@ -7,6 +7,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 import concurrent.futures
 import asyncio
+
 '''
 Rename the file tg_token_example.py to tg_token.py and make sure you gather
 a Telegram bot token from @BotFather and place it in the file.
@@ -16,6 +17,8 @@ TG_TOKEN = '0123456789:Aa1Bb_Cc2Dd3Ee4Ff5Gg_-6Hh7Ii8JjKk9L'
 from tg_token import TG_TOKEN
 import yaml
 
+from download_queue import queue_init, add_to_queue, process_queue, queue_status
+import download_queue
 
 # try:
 #     video_url = sys.argv[1]
@@ -109,29 +112,113 @@ async def download_best_audio_as_mp3(video_url, save_path=save_path, update=None
 async def hello(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(f'Hello {update.effective_user.first_name}')
 
+
+
+async def download_from_queue(url, user_id=None):
+    def download_task():
+        # Expand the home directory if needed
+        expanded_path = os.path.expanduser(save_path)
+        
+        destination_path = expanded_path + '/%(title)s.%(ext)s'
+        ydl_opts = {
+            'outtmpl': destination_path,
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '0',
+            }],
+            'keepvideo': True,  # Keep the original video file to avoid deletion errors
+        }
+        
+        track_title = None
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # First extract the info to get the title
+            info_dict = ydl.extract_info(url, download=False)
+            track_title = info_dict['title']
+            
+            # Send encoding notification before downloading
+            if user_id:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                from telegram import Bot
+                bot = Bot(token=TG_TOKEN)
+                loop.run_until_complete(bot.send_message(
+                    chat_id=user_id,
+                    text=f'⚙️ Starting encoding: {track_title}',
+                    disable_web_page_preview=True
+                ))
+                loop.close()
+            
+            # Now download and process
+            track_info = ydl.extract_info(url, download=True)
+            track_title = track_info['title']  # Get the title again in case it changed
+            
+            converted_path = expanded_path + '/' + track_title + '.mp3'
+            file_time = time.time()
+            
+            # Make sure the file exists before trying to modify its timestamp
+            if os.path.exists(converted_path):
+                os.utime(converted_path, (file_time, file_time))
+                
+                # Look for and delete any video files with the same base name
+                # This handles files with format codes like .f616.mp4
+                base_file_pattern = os.path.join(expanded_path, track_title)
+                for file in os.listdir(expanded_path):
+                    file_path = os.path.join(expanded_path, file)
+                    # Check if this is a video file matching our base name
+                    if file.startswith(track_title) and not file.endswith('.mp3') and os.path.isfile(file_path):
+                        try:
+                            os.remove(file_path)
+                            print(f"Deleted original file: {file}")
+                        except Exception as e:
+                            print(f"Warning: Could not delete original file {file}: {e}")
+            
+            return track_title, converted_path
+    
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(executor, download_task)
+
+
 async def url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    global is_downloading
-    yt_url = " ".join(context.args)
-    if is_downloading:
-        await update.message.reply_text('I am already downloading a file. Please wait.')
+    user_id = update.effective_user.id
+    
+    # Check if user is authorized
+    if user_id not in admins and user_id not in users:
+        await update.message.reply_text('Sorry, you are not authorized to use this command.')
         return
     
-    # Don't await the download function - schedule it and continue
-    is_downloading = True
-    await update.message.reply_text(f'I will download from {yt_url}', disable_web_page_preview=True)
+    yt_url = " ".join(context.args)
+    if not yt_url:
+        await update.message.reply_text('Please provide a YouTube URL.')
+        return
     
-    # Create a background task instead of awaiting
-    asyncio.create_task(download_best_audio_as_mp3(yt_url, save_path, update, context))
+    # Add to queue instead of downloading directly
+    await add_to_queue(yt_url, user_id, update)
 
 async def get_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     username = update.effective_user.username
     await update.message.reply_text(f'Your User ID: {user_id}\nYour Username: @{username}')
 
+
+queue_init({
+    'save_path': save_path,
+    'executor': executor,
+    'admins': admins,
+    'users': users,
+    'token': TG_TOKEN  # Add this
+})
+
+
+download_queue.download_from_queue = download_from_queue
+
+
 app = ApplicationBuilder().token(TG_TOKEN).build()
 
 app.add_handler(CommandHandler("hello", hello))
 app.add_handler(CommandHandler("dl", url))
 app.add_handler(CommandHandler("myid", get_id))
+app.add_handler(CommandHandler("queue", queue_status))
 
 app.run_polling()

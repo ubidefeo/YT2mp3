@@ -1,0 +1,41 @@
+active: false
+current: null
+history:
+- completed_at: 1744984254
+  requested_by: 16168654
+  timestamp: 1744984223
+  title: How Isometric Coordinates Work in 2D games
+  url: https://www.youtube.com/watch?v=04oQ2jOUjkU&pp=0gcJCX4JAYcqIYzv
+  user_mention: '@ubidefeo'
+- completed_at: 1744982270
+  requested_by: 16168654
+  timestamp: 1744982239
+  title: How Isometric Coordinates Work in 2D games
+  url: https://www.youtube.com/watch?v=04oQ2jOUjkU&pp=0gcJCX4JAYcqIYzv
+  user_mention: '@ubidefeo'
+- completed_at: 1744982127
+  requested_by: 16168654
+  timestamp: 1744982093
+  title: How Isometric Coordinates Work in 2D games
+  url: https://www.youtube.com/watch?v=04oQ2jOUjkU&pp=0gcJCX4JAYcqIYzv
+  user_mention: '@ubidefeo'
+- completed_at: 1744982013
+  requested_by: 16168654
+  timestamp: 1744981979
+  title: How Isometric Coordinates Work in 2D games
+  url: https://www.youtube.com/watch?v=04oQ2jOUjkU&pp=0gcJCX4JAYcqIYzv
+  user_mention: '@ubidefeo'
+- completed_at: 1744981821
+  requested_by: 16168654
+  timestamp: 1744981790
+  title: How Isometric Coordinates Work in 2D games
+  url: https://www.youtube.com/watch?v=04oQ2jOUjkU&pp=0gcJCX4JAYcqIYzv
+- completed_at: 1744981549
+  requested_by: 16168654
+  timestamp: 1744981516
+  title: How Isometric Coordinates Work in 2D games
+  url: https://www.youtube.com/watch?v=04oQ2jOUjkU&pp=0gcJCX4JAYcqIYzv
+queue: []
+settings:
+  max_history_size: 20
+  max_queue_size: 10
