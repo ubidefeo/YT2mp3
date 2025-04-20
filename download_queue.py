@@ -60,8 +60,15 @@ def load_queue():
         return default_queue
 
 def save_queue(queue_data):
+    import copy
+    import json
+    
+    # Convert to JSON and back to create a new object structure without shared references
+    queue_json = json.dumps(queue_data)
+    queue_copy = json.loads(queue_json)
+    
     with open('queue.yml', 'w') as file:
-        yaml.dump(queue_data, file, default_flow_style=False)
+        yaml.dump(queue_copy, file, default_flow_style=False)
 
 async def add_to_queue(url, user_id, update):
     queue_data = load_queue()
@@ -119,6 +126,7 @@ async def process_queue():
         # Get the next item
         next_item = queue_data['queue'][0]
         url = next_item['url']
+        title = next_item['title'] if 'title' in next_item else url  # Fallback to URL if title not available
         user_id = next_item['requested_by']
         user_mention = next_item.get('user_mention', '')  # Get user mention with fallback
         
@@ -128,7 +136,7 @@ async def process_queue():
         # Send notification to the user that download is starting
         from telegram import Bot
         bot = Bot(token=TG_TOKEN)
-        await bot.send_message(chat_id=user_id, text=f'🔄 Starting download of: {url}', disable_web_page_preview=True)
+        await bot.send_message(chat_id=user_id, text=f'🔄 Starting download of: {title}', disable_web_page_preview=True)
         
         # Process download
         is_downloading = True
@@ -226,5 +234,84 @@ async def queue_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         for i, item in enumerate(queue_data['queue']):
             message += f"{i+1}. {item['url']}\n"
     
-    await update.message.reply_text(message)
+    await update.message.reply_text(message, disable_web_page_preview=True)
 
+async def list_queue(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+    
+    # Check if user is authorized
+    if user_id not in admins and user_id not in users:
+        await update.message.reply_text('Sorry, you are not authorized to use this command.')
+        return
+    
+    queue_data = load_queue()
+    
+    # Check if there are pending downloads
+    if not queue_data['queue'] and not queue_data['active']:
+        await update.message.reply_text('📋 The download queue is empty.')
+        return
+    
+    # Build the message
+    message_parts = ['📋 Current download queue:']
+    
+    # Add the currently downloading item if there is one
+    if queue_data['active'] and queue_data['current']:
+        current = queue_data['current']
+        current_title = current.get('title', 'Downloading...')  # Use stored title or placeholder if not available yet
+        user_mention = current.get('user_mention', 'Unknown')
+        message_parts.append(f"\n🔄 Currently downloading: {current_title}")
+        message_parts.append(f"   Requested by: {user_mention}")
+    
+    # Add pending items
+    if queue_data['queue']:
+        message_parts.append("\nPending downloads:")
+        for i, item in enumerate(queue_data['queue']):
+            # For pending items, we might not have the title yet, so use URL as fallback
+            title = item.get('title', f"Pending item {i+1}")
+            user_mention = item.get('user_mention', 'Unknown')
+            message_parts.append(f"{i+1}. {title}")
+            message_parts.append(f"   Requested by: {user_mention}")
+    
+    # Send the complete message
+    await update.message.reply_text('\n'.join(message_parts))
+
+async def purge_queue(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+    
+    # Only admins can purge the queue
+    if user_id not in admins:
+        await update.message.reply_text('Sorry, only admins can purge the queue and history.')
+        return
+    
+    # Get purge option from args (if any)
+    purge_type = "all"  # Default to purging everything
+    if context.args:
+        arg = context.args[0].lower()
+        if arg in ["queue", "history", "all"]:
+            purge_type = arg
+    
+    queue_data = load_queue()
+    
+    # Perform the requested purge
+    if purge_type == "queue" or purge_type == "all":
+        if is_downloading:
+          current_item = queue_data['queue'][0]
+          
+        queue_data['queue'] = []
+        queue_data['active'] = False
+        queue_data['current'] = None
+    
+    if purge_type == "history" or purge_type == "all":
+        queue_data['history'] = []
+    if is_downloading:
+      queue_data['queue'].append(current_item)
+    # Save the updated queue
+    save_queue(queue_data)
+    
+    # Confirm the action to the user
+    if purge_type == "queue":
+        await update.message.reply_text('✅ Download queue has been purged.')
+    elif purge_type == "history":
+        await update.message.reply_text('✅ Download history has been purged.')
+    else:
+        await update.message.reply_text('✅ Download queue and history have been purged.')

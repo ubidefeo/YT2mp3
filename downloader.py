@@ -17,7 +17,7 @@ TG_TOKEN = '0123456789:Aa1Bb_Cc2Dd3Ee4Ff5Gg_-6Hh7Ii8JjKk9L'
 from tg_token import TG_TOKEN
 import yaml
 
-from download_queue import queue_init, add_to_queue, process_queue, queue_status
+from download_queue import queue_init, add_to_queue, queue_status, list_queue, purge_queue
 import download_queue
 
 # try:
@@ -127,7 +127,7 @@ async def download_from_queue(url, user_id=None):
                 'preferredcodec': 'mp3',
                 'preferredquality': '0',
             }],
-            'keepvideo': True,  # Keep the original video file to avoid deletion errors
+            'keepvideo': False,  # Keep the original video file to avoid deletion errors
         }
         
         track_title = None
@@ -220,5 +220,7 @@ app.add_handler(CommandHandler("hello", hello))
 app.add_handler(CommandHandler("dl", url))
 app.add_handler(CommandHandler("myid", get_id))
 app.add_handler(CommandHandler("queue", queue_status))
+app.add_handler(CommandHandler("purge", purge_queue))
+app.add_handler(CommandHandler("list", list_queue))
 
 app.run_polling()
