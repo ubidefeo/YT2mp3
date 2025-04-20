@@ -4,7 +4,7 @@ import asyncio
 import yaml
 import time 
 import os
-
+import yt_dlp
 # Queue management functions
 save_path = None
 executor = None
@@ -12,15 +12,21 @@ admins = []
 users = []
 is_downloading = False
 TG_TOKEN = None
+current_download_process = None
+should_stop_download = False
 
 # Function to initialize the module
 def queue_init(config):
     global save_path, executor, admins, users, TG_TOKEN
+    global current_download_process, should_stop_download
+
     save_path = config['save_path']
     executor = config['executor']
     admins = config['admins']
     users = config['users']
     TG_TOKEN = config['token']  # Add this
+    should_stop_download = config.get('should_stop_download', False)
+    current_download_process = config.get('current_download_process', None)
 
 def load_queue():
     try:
@@ -136,8 +142,11 @@ async def process_queue():
         # Send notification to the user that download is starting
         from telegram import Bot
         bot = Bot(token=TG_TOKEN)
-        await bot.send_message(chat_id=user_id, text=f'🔄 Starting download of: {title}', disable_web_page_preview=True)
-        
+        try:
+            await bot.send_message(chat_id=user_id, text=f'🔄 Starting download of: {title}', disable_web_page_preview=True)
+        except Exception as notification_error:
+            print(f"Error sending notification: {notification_error}")
+  
         # Process download
         is_downloading = True
         try:
@@ -172,9 +181,40 @@ async def process_queue():
         except Exception as e:
             print(f"Error processing queue item: {e}")
             
-            # Send error notification to the user
-            await bot.send_message(chat_id=user_id, text=f'❌ Error downloading: {str(e)}')
-            
+            if "Download manually stopped" in str(e):
+                
+                expanded_path = os.path.expanduser(save_path)
+        
+                try:
+                    # Look for and delete temp files related to this download
+                    for file in os.listdir(expanded_path):
+                        file_path = os.path.join(expanded_path, file)
+                        # Target both .ytdl and .part files - they often contain the video ID
+                        is_ytdl, is_part, is_mp4 = file.endswith('.ytdl'), file.endswith('.part'), file.endswith('.mp4')
+                        if (is_ytdl or is_part or is_mp4) and os.path.isfile(file_path):
+                            try:
+                                # FUTURE: add keep_mp4 option to avoid deleting .mp4 (video) files
+                                os.remove(file_path)
+                                print(f"Deleted temporary file: {file}")
+                            except Exception as cleanup_error:
+                                print(f"Warning: Could not delete temporary file {file}: {cleanup_error}")
+                except Exception as cleanup_error:
+                    print(f"Error while cleaning up temporary files: {cleanup_error}")
+                
+
+
+                await bot.send_message(
+                    chat_id=user_id,
+                    text=f'❌ Download was manually stopped.',
+                    disable_web_page_preview=True
+                )
+            else:
+                # Handle other errors
+                await bot.send_message(
+                    chat_id=user_id,
+                    text=f'❌ Error downloading: {str(e)}',
+                    disable_web_page_preview=True
+                )
             # Mark as inactive so queue can continue
             queue_data = load_queue()
             queue_data['active'] = False
@@ -185,10 +225,18 @@ async def process_queue():
         finally:
             is_downloading = False
 
-# Modify this to work with the queue system
-async def download_from_queue(url):
+async def download_from_queue(url, user_id=None):
+    global current_download_process, should_stop_download
+    
+    should_stop_download = False
+    
     def download_task():
-        destination_path = save_path + '/%(title)s.%(ext)s'
+        global should_stop_download
+        
+        # Expand the home directory if needed
+        expanded_path = os.path.expanduser(save_path)
+        
+        destination_path = expanded_path + '/%(title)s.%(ext)s'
         ydl_opts = {
             'outtmpl': destination_path,
             'postprocessors': [{
@@ -196,19 +244,95 @@ async def download_from_queue(url):
                 'preferredcodec': 'mp3',
                 'preferredquality': '0',
             }],
+            'keepvideo': True,
+            # Add a progress hook to check the stop flag
+            'progress_hooks': [lambda d: check_stop_flag(d)],
         }
         
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            track_info = ydl.extract_info(url, download=True)
-            track_title = track_info['title']
-            converted_path = save_path + '/' + track_title + '.mp3'
-            file_time = time.time()
-            os.utime(converted_path, (file_time, file_time))
-            return track_title, converted_path
-    
+        def check_stop_flag(d):
+            if should_stop_download:
+                # Raise an exception to stop yt-dlp
+                raise Exception("Download manually stopped")
+        
+        track_title = None
+        
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # First extract the info to get the title
+                info_dict = ydl.extract_info(url, download=False)
+                track_title = info_dict['title']
+                
+                # Send encoding notification before downloading
+                if user_id and not should_stop_download:
+                    pass
+                    # ... notification code ...
+                
+                # Now download and process if not stopped
+                if not should_stop_download:
+                    track_info = ydl.extract_info(url, download=True)
+                    track_title = track_info['title']
+                    
+                    # Only proceed with file operations if download wasn't stopped
+                    if not should_stop_download:
+                        converted_path = expanded_path + '/' + track_title + '.mp3'
+                        file_time = time.time()
+                        
+                        if os.path.exists(converted_path):
+                            os.utime(converted_path, (file_time, file_time))
+                            
+                            # Look for and delete any video files
+                            base_file_pattern = os.path.join(expanded_path, track_title)
+                            for file in os.listdir(expanded_path):
+                                file_path = os.path.join(expanded_path, file)
+                                if file.startswith(track_title) and not file.endswith('.mp3') and os.path.isfile(file_path):
+                                    try:
+                                        os.remove(file_path)
+                                        print(f"Deleted original file: {file}")
+                                    except Exception as e:
+                                        print(f"Warning: Could not delete original file {file}: {e}")
+                
+                # If stopped, raise an exception to signal it
+                if should_stop_download:
+                    raise Exception("Download manually stopped")
+                    
+                return track_title, converted_path
+        except Exception as e:
+            if "Download manually stopped" in str(e):
+                raise Exception("Download manually stopped")
+            raise
+            
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(executor, download_task)
-  
+    
+    try:
+        current_download_process = True  # Mark that a download is in progress
+        return await loop.run_in_executor(executor, download_task)
+    finally:
+        current_download_process = None  # Clear the flag when done
+
+async def stop_download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+    
+    # Check if user is authorized
+    if user_id not in admins and user_id not in users:
+        await update.message.reply_text('Sorry, you are not authorized to use this command.')
+        return
+    
+    queue_data = load_queue()
+    
+    # Stop the current download
+    if queue_data['active'] and get_download_process() is not None:
+        # Set the flag to stop the download
+        set_stop_flag(True)
+        
+        # Mark queue as inactive
+        queue_data['active'] = False
+        queue_data['current'] = None
+        save_queue(queue_data)
+        
+        await update.message.reply_text('❌ Download is being stopped. Please wait...')
+    else:
+        await update.message.reply_text('❌ No active downloads to stop.')
+
 async def queue_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     
@@ -315,3 +439,17 @@ async def purge_queue(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text('✅ Download history has been purged.')
     else:
         await update.message.reply_text('✅ Download queue and history have been purged.')
+
+def set_stop_flag(value):
+    global should_stop_download
+    should_stop_download = value
+
+def get_stop_flag():
+    return should_stop_download
+
+def set_download_process(value):
+    global current_download_process
+    current_download_process = value
+
+def get_download_process():
+    return current_download_process

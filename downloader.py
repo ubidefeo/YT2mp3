@@ -18,6 +18,7 @@ from tg_token import TG_TOKEN
 import yaml
 
 from download_queue import queue_init, add_to_queue, queue_status, list_queue, purge_queue
+from download_queue import download_from_queue, stop_download
 import download_queue
 
 # try:
@@ -30,10 +31,20 @@ Feel free to choose a different path for the downloaded files.
 The script will not create this folder, so make sure it exists.
 '''
 save_path = '~/Downloads/yt-rips' 
+is_downloading = False
+executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+current_download_process = None
+should_stop_download = False
 
 # Load the YAML file
-with open('authorised_users.yml', 'r') as file:
-    data = yaml.safe_load(file)
+# Make sure to have the file in the same directory as this script
+try:
+  with open('authorised_users.yml', 'r') as file:
+      data = yaml.safe_load(file)
+except FileNotFoundError:
+  print("YAML file not found. Rename 'authorised_users_example.yml' and fill the required data.")
+  sys.exit(1)
+
 
 # Now you can access the data
 admins = data['admins']
@@ -41,8 +52,8 @@ users = data['users']
 
 print('Admins:', admins)
 print('Users:', users)
-is_downloading = False
-executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+
+
 
 # async def download_best_audio_as_mp3(video_url, save_path=save_path, update=None):
 #     global is_downloading
@@ -114,70 +125,70 @@ async def hello(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 
-async def download_from_queue(url, user_id=None):
-    def download_task():
-        # Expand the home directory if needed
-        expanded_path = os.path.expanduser(save_path)
+# async def download_from_queue(url, user_id=None):
+#     def download_task():
+#         # Expand the home directory if needed
+#         expanded_path = os.path.expanduser(save_path)
         
-        destination_path = expanded_path + '/%(title)s.%(ext)s'
-        ydl_opts = {
-            'outtmpl': destination_path,
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '0',
-            }],
-            'keepvideo': False,  # Keep the original video file to avoid deletion errors
-        }
+#         destination_path = expanded_path + '/%(title)s.%(ext)s'
+#         ydl_opts = {
+#             'outtmpl': destination_path,
+#             'postprocessors': [{
+#                 'key': 'FFmpegExtractAudio',
+#                 'preferredcodec': 'mp3',
+#                 'preferredquality': '0',
+#             }],
+#             'keepvideo': False,  # Option to keep the original video file to avoid deletion errors
+#         }
         
-        track_title = None
+#         track_title = None
         
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # First extract the info to get the title
-            info_dict = ydl.extract_info(url, download=False)
-            track_title = info_dict['title']
+#         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+#             # First extract the info to get the title
+#             info_dict = ydl.extract_info(url, download=False)
+#             track_title = info_dict['title']
             
-            # Send encoding notification before downloading
-            if user_id:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                from telegram import Bot
-                bot = Bot(token=TG_TOKEN)
-                loop.run_until_complete(bot.send_message(
-                    chat_id=user_id,
-                    text=f'⚙️ Starting encoding: {track_title}',
-                    disable_web_page_preview=True
-                ))
-                loop.close()
+#             # Send encoding notification before downloading
+#             if user_id:
+#                 loop = asyncio.new_event_loop()
+#                 asyncio.set_event_loop(loop)
+#                 from telegram import Bot
+#                 bot = Bot(token=TG_TOKEN)
+#                 loop.run_until_complete(bot.send_message(
+#                     chat_id=user_id,
+#                     text=f'⚙️ Starting encoding: {track_title}',
+#                     disable_web_page_preview=True
+#                 ))
+#                 loop.close()
             
-            # Now download and process
-            track_info = ydl.extract_info(url, download=True)
-            track_title = track_info['title']  # Get the title again in case it changed
+#             # Now download and process
+#             track_info = ydl.extract_info(url, download=True)
+#             track_title = track_info['title']  # Get the title again in case it changed
             
-            converted_path = expanded_path + '/' + track_title + '.mp3'
-            file_time = time.time()
+#             converted_path = expanded_path + '/' + track_title + '.mp3'
+#             file_time = time.time()
             
-            # Make sure the file exists before trying to modify its timestamp
-            if os.path.exists(converted_path):
-                os.utime(converted_path, (file_time, file_time))
+#             # Make sure the file exists before trying to modify its timestamp
+#             if os.path.exists(converted_path):
+#                 os.utime(converted_path, (file_time, file_time))
                 
-                # Look for and delete any video files with the same base name
-                # This handles files with format codes like .f616.mp4
-                base_file_pattern = os.path.join(expanded_path, track_title)
-                for file in os.listdir(expanded_path):
-                    file_path = os.path.join(expanded_path, file)
-                    # Check if this is a video file matching our base name
-                    if file.startswith(track_title) and not file.endswith('.mp3') and os.path.isfile(file_path):
-                        try:
-                            os.remove(file_path)
-                            print(f"Deleted original file: {file}")
-                        except Exception as e:
-                            print(f"Warning: Could not delete original file {file}: {e}")
+#                 # Look for and delete any video files with the same base name
+#                 # This handles files with format codes like .f616.mp4
+#                 base_file_pattern = os.path.join(expanded_path, track_title)
+#                 for file in os.listdir(expanded_path):
+#                     file_path = os.path.join(expanded_path, file)
+#                     # Check if this is a video file matching our base name
+#                     if file.startswith(track_title) and not file.endswith('.mp3') and os.path.isfile(file_path):
+#                         try:
+#                             os.remove(file_path)
+#                             print(f"Deleted original file: {file}")
+#                         except Exception as e:
+#                             print(f"Warning: Could not delete original file {file}: {e}")
             
-            return track_title, converted_path
+#             return track_title, converted_path
     
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(executor, download_task)
+#     loop = asyncio.get_event_loop()
+#     return await loop.run_in_executor(executor, download_task)
 
 
 async def url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -201,17 +212,29 @@ async def get_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     username = update.effective_user.username
     await update.message.reply_text(f'Your User ID: {user_id}\nYour Username: @{username}')
 
-
+async def commands(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    commands_text = """
+    /hello - Greet the bot
+/dl <url> - Download a YouTube video
+/stop - Stop the current download
+/myid - Get your user ID (send to admin to be allowed to download)
+/queue - Check the download queue status
+/purge - Clear the download queue (admins only)
+/list - List all items in the download queue
+    """
+    await update.message.reply_text(commands_text)
 queue_init({
     'save_path': save_path,
     'executor': executor,
     'admins': admins,
     'users': users,
-    'token': TG_TOKEN  # Add this
+    'token': TG_TOKEN,
+    'should_stop_download': should_stop_download,
+    'current_download_process': current_download_process
 })
 
 
-download_queue.download_from_queue = download_from_queue
+# download_queue.download_from_queue = download_from_queue
 
 
 app = ApplicationBuilder().token(TG_TOKEN).build()
@@ -222,5 +245,7 @@ app.add_handler(CommandHandler("myid", get_id))
 app.add_handler(CommandHandler("queue", queue_status))
 app.add_handler(CommandHandler("purge", purge_queue))
 app.add_handler(CommandHandler("list", list_queue))
+app.add_handler(CommandHandler("help", commands))
+app.add_handler(CommandHandler("stop", stop_download))
 
 app.run_polling()
