@@ -45,9 +45,13 @@ If everything worked well you can start sending messages to your bot and get it 
 
 ## Commands
 
-### `/hello`
-The bot will respond to `/hello` with "Hello YOUR_NAME".
-
-### `/dl`
-The bot will process the URL and download the content to mp3.
-`/dl https://www.youtube.com/watch?v=dQw4w9WgXcQ`
+* *`/help`* - Show this help message
+* *`/hello`* - Greet the bot
+* *`/myid`* - Get your user ID (send to admin to be allowed to download)
+* *`/dl <url>`* - Download a YouTube video (or playlist)
+* *`/skip`* - Skip the current download and continue to the next
+* *`/stop`* - Stop the current download
+* *`/current`* - Show the currently downloading item (with preview)
+* *`/queue`* - Check the download queue status
+* *`/purge`* - Clear the download queue (admins only)
+* *`/test`* - Test the bot with a sample URL (admins only)

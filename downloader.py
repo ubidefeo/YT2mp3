@@ -77,17 +77,17 @@ async def get_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def commands(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     commands_text = """
-/hello - Greet the bot
-/dl <url> - Download a YouTube video
-/stop - Stop the current download
-/skip - Skip the current download and continue to the next
-/current - Show the currently downloading item (with preview)
-/myid - Get your user ID (send to admin to be allowed to download)
-/queue - Check the download queue status
-/purge - Clear the download queue (admins only)
-/help - Show this help message
-/test - Test the bot with a sample URL (admins only)"""
-    await update.message.reply_text(commands_text)
+*/help* - Show this help message
+*/hello* - Greet the bot
+*/myid* - Get your user ID (send to admin to be allowed to download)
+*/dl <url>* - Download a YouTube video (or playlist)
+*/skip* - Skip the current download and continue to the next
+*/stop* - Stop the current download
+*/current* - Show the currently downloading item (with preview)
+*/queue* - Check the download queue status
+*/purge* - Clear the download queue (admins only)
+*/test* - Test the bot with a sample URL (admins only)"""
+    await update.message.reply_text(commands_text, parse_mode='Markdown')
 
 download_queue.queue_init({
     'save_path': save_path,
