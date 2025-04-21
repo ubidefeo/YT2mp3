@@ -2,11 +2,14 @@
 
 # Admin users have full access and can add new users
 admins:
-  - 16168654  # Your Telegram user ID
+  - 1234567  # Your Telegram user ID
 
 # Regular users can only use the bot's main features
+# If you remove users, make sure to remove the corresponding lines from the list
+# and that the list is properly formatted (users: [])
 users:
-
+  - 8901234  # Regular user's Telegram ID
+  - 5678901  # Another user's Telegram ID
 # Configuration options
 settings:
   unauthorized_message: true  # Whether to send a message when unauthorized users try to access

@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "YT2mp3"
+version = "0.1.0"
+description = "Telegram bot to download YouTube videos as MP3 files"
+authors = ["ubi de feo <u.defeo@me.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"  # Specify Python 3.11 since that's working for you
+python-telegram-bot = "^20.0"  # Use the latest compatible version
+yt-dlp = "^2025.0.0"  # Use the latest version
+pyyaml = "^6.0"
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.0.0"
+flake8 = "^6.0.0"
+pytest = "^7.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+yt2mp3 = "YT2mp3.downloader:main"

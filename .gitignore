@@ -1,3 +1,21 @@
+# Project files
+.DS_Store
 tg_token.py
 authorised_users.yml
 queue.yml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+.venv/
+.env/
+
+# Poetry
+dist/
+poetry.lock

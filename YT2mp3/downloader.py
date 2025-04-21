@@ -4,14 +4,14 @@ import os
 import time
 import yt_dlp
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, JobQueue
 import concurrent.futures
 import yaml
-import download_queue
+from . import download_queue
 
 
 try:
-  from tg_token import TG_TOKEN
+  from .tg_token import TG_TOKEN
 except ImportError:
   print('''
 Rename the file tg_token_example.py to tg_token.py and make sure you gather
@@ -30,19 +30,6 @@ is_downloading = False
 executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
 current_download_process = None
 should_stop_download = False
-
-try:
-  with open('authorised_users.yml', 'r') as file:
-      data = yaml.safe_load(file)
-except FileNotFoundError:
-  print("YAML file not found. Rename 'authorised_users_example.yml' and fill the required data.")
-  sys.exit(1)
-
-admins = data['admins']
-users = data['users']
-
-print('Admins:', admins)
-print('Users:', users)
 
 async def hello(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(f'Hello {update.effective_user.first_name}')
@@ -89,28 +76,49 @@ async def commands(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 */test* - Test the bot with a sample URL (admins only)"""
     await update.message.reply_text(commands_text, parse_mode='Markdown')
 
-download_queue.queue_init({
-    'save_path': save_path,
-    'executor': executor,
-    'admins': admins,
-    'users': users,
-    'token': TG_TOKEN,
-    'should_stop_download': should_stop_download,
-    'current_download_process': current_download_process
-})
+def main():
+    global admins, users
+    
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    config_file = os.path.join(current_dir, 'authorised_users.yml')
 
-app = ApplicationBuilder().token(TG_TOKEN).build()
+    try:
+        with open(config_file, 'r') as file:
+          data = yaml.safe_load(file)
+          admins = data['admins']
+          users = data['users']
+          print('Admins:', admins)
+          print('Users:', users)
+    except FileNotFoundError:
+      print("YAML file not found. Rename 'authorised_users_example.yml' and fill the required data.")
+      sys.exit(1)
 
-app.add_handler(CommandHandler("hello", hello))
-app.add_handler(CommandHandler("help", commands))
-app.add_handler(CommandHandler("myid", get_id))
-app.add_handler(CommandHandler("dl", url))
-app.add_handler(CommandHandler("queue", download_queue.queue_status))
-app.add_handler(CommandHandler("current", download_queue.current_download))
-app.add_handler(CommandHandler("purge", download_queue.purge_queue))
-app.add_handler(CommandHandler("stop", download_queue.stop_download))
-app.add_handler(CommandHandler("skip", download_queue.skip_download))
-app.add_handler(CommandHandler("test", url_test))
+    app = ApplicationBuilder().token(TG_TOKEN).build()
+    
+    download_queue.queue_init({
+        'save_path': save_path,
+        'executor': executor,
+        'admins': admins,
+        'users': users,
+        'token': TG_TOKEN,
+        'should_stop_download': should_stop_download,
+        'current_download_process': current_download_process
+    })
 
-app.job_queue.run_once(lambda _: download_queue.recover_queue(), 1)
-app.run_polling()
+
+    app.add_handler(CommandHandler("hello", hello))
+    app.add_handler(CommandHandler("help", commands))
+    app.add_handler(CommandHandler("myid", get_id))
+    app.add_handler(CommandHandler("dl", url))
+    app.add_handler(CommandHandler("queue", download_queue.queue_status))
+    app.add_handler(CommandHandler("current", download_queue.current_download))
+    app.add_handler(CommandHandler("purge", download_queue.purge_queue))
+    app.add_handler(CommandHandler("stop", download_queue.stop_download))
+    app.add_handler(CommandHandler("skip", download_queue.skip_download))
+    app.add_handler(CommandHandler("test", url_test))
+
+    app.job_queue.run_once(lambda _: download_queue.recover_queue(), 1)
+    app.run_polling()
+
+if __name__ == '__main__':
+    main()
