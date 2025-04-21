@@ -6,7 +6,7 @@ authors = ["ubi de feo <u.defeo@me.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.11"  # Specify Python 3.11 since that's working for you
+python = "3.11"  # Specify Python 3.11 since that's working for you
 python-telegram-bot = "^20.0"  # Use the latest compatible version
 yt-dlp = "^2025.0.0"  # Use the latest version
 pyyaml = "^6.0"
