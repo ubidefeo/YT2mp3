@@ -21,4 +21,4 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-yt2mp3 = "YT2mp3.downloader:main"
+yt2mp3 = "YT2mp3bot.downloader:main"
