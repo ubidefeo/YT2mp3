@@ -3,6 +3,7 @@
 tg_token.py
 authorised_users.yml
 queue.yml
+.python_version
 
 # Python
 __pycache__/
