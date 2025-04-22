@@ -7,7 +7,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"  # Specify Python 3.11 since that's working for you
-python-telegram-bot = "^20.0"  # Use the latest compatible version
+python-telegram-bot = {extras = ["job-queue"], version = "^20.0"}
 yt-dlp = "^2025.0.0"  # Use the latest version
 pyyaml = "^6.0"
 
