@@ -332,24 +332,61 @@ async def handle_playlist(url, user_id, update):
 
 async def stop_download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
-    if user_id not in admins:
-        await update.message.reply_text('Sorry, only admins can stop all downloads.')
+    
+    # Check if user is authorized to use the bot at all
+    if user_id not in admins and user_id not in users:
+        await update.message.reply_text('Sorry, you are not authorized to use this command.')
         return
+    
     queue_data = load_queue()
-    if queue_data['settings'].get('original_max_queue_size'):
-        queue_data['settings']['max_queue_size'] = queue_data['settings']['original_max_queue_size']
-        del queue_data['settings']['original_max_queue_size']
-    queue_data['active'] = False
-    queue_data['current'] = None
-    queue_data['queue'] = []
-    save_queue(queue_data)
-    if get_download_process() is not None:
-        set_stop_flag(True)
-        await update.message.reply_text('❌ Stopping all downloads. Please wait...')
-        await asyncio.sleep(1)
+    
+    # Admin behavior - stop everything
+    if user_id in admins:
+        if queue_data['settings'].get('original_max_queue_size'):
+            queue_data['settings']['max_queue_size'] = queue_data['settings']['original_max_queue_size']
+            del queue_data['settings']['original_max_queue_size']
+        queue_data['active'] = False
+        queue_data['current'] = None
+        queue_data['queue'] = []
+        save_queue(queue_data)
+        
         if get_download_process() is not None:
-            set_download_process(None)
-    await update.message.reply_text('✅ All downloads have been stopped and queue cleared.')
+            set_stop_flag(True)
+            await update.message.reply_text('❌ Stopping all downloads. Please wait...')
+            await asyncio.sleep(1)
+            if get_download_process() is not None:
+                set_download_process(None)
+        await update.message.reply_text('✅ All downloads have been stopped and queue cleared.')
+    
+    # Regular user behavior - only stop user's downloads
+    else:
+        user_downloads_removed = 0
+        filtered_queue = []
+        for item in queue_data['queue']:
+            if item.get('requested_by') != user_id:
+                filtered_queue.append(item)
+            else:
+                user_downloads_removed += 1
+        
+        current_belongs_to_user = False
+        if (queue_data['active'] and queue_data['current'] and 
+            queue_data['current'].get('requested_by') == user_id):
+            current_belongs_to_user = True
+            
+        queue_data['queue'] = filtered_queue
+        save_queue(queue_data)
+        
+        if current_belongs_to_user and get_download_process() is not None:
+            set_stop_flag(True)
+            await update.message.reply_text('⏭️ Stopping your current download and removing your items from queue...')
+        
+        if user_downloads_removed > 0 or current_belongs_to_user:
+            message = f"✅ Removed {user_downloads_removed} of your downloads from the queue."
+            if current_belongs_to_user:
+                message += " Your current download has been stopped."
+            await update.message.reply_text(message)
+        else:
+            await update.message.reply_text("You don't have any active downloads in the queue.")
 
 async def skip_download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
