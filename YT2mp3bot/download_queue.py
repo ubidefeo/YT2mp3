@@ -353,16 +353,23 @@ async def stop_download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def skip_download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
+    
     if user_id not in admins and user_id not in users:
         await update.message.reply_text('Sorry, you are not authorized to use this command.')
         return
+        
     queue_data = load_queue()
     current_title = queue_data['current']['title'] if queue_data['current'] else 'Unknown'
+    
     if queue_data['active'] and get_download_process() is not None:
+        if user_id not in admins and queue_data['current'].get('requested_by') != user_id:
+            await update.message.reply_text('Sorry, you can only skip downloads that you requested.')
+            return
         set_stop_flag(True)
         await update.message.reply_text(f"⏭️ Skipping *{current_title}*.\nProcessing next item in queue...", parse_mode='Markdown')
     else:
         await update.message.reply_text('❌ No active downloads to skip.')
+
 
 async def queue_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
@@ -385,13 +392,13 @@ async def queue_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             message += f"{i+1}. {item['url']}\n"
     await update.message.reply_text(message, disable_web_page_preview=True, parse_mode='Markdown')
 
-
 async def current_download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     if user_id not in admins and user_id not in users:
         if update.message:
             await update.message.reply_text('*Sorry, you are not authorized to use this command.*', parse_mode='Markdown')
         return
+        
     queue_data = load_queue()
     if (queue_data['active'] and queue_data['current'] and 
         'url' in queue_data['current'] and 'title' in queue_data['current']):
@@ -399,10 +406,18 @@ async def current_download(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         current_url = current['url']
         current_title = current['title']
         user_mention = current.get('user_mention', 'Unknown')
+        requested_by = current.get('requested_by', None)
+        
+        if user_id not in admins and requested_by != user_id:
+            await update.message.reply_text('There is a download in progress, but it was not requested by you.', 
+                                          parse_mode='Markdown')
+            return
+            
         message = f"🔄 Currently downloading:\n*{current_title}*\n\nRequested by: {user_mention}\n\n{current_url}"
         await update.message.reply_text(message, parse_mode='Markdown', disable_web_page_preview=False)
     else:
         await update.message.reply_text('No download information available at the moment. Please try again in a few seconds.')
+
 
 def set_stop_flag(value):
     global should_stop_download
